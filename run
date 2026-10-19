@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -e
+cd "$(dirname "$0")"
+export REQUESTS_CA_BUNDLE="$(pwd)/pebble.minica.pem"
+exec python3 main.py "$@"
