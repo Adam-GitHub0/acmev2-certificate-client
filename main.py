@@ -23,7 +23,7 @@ def get_certificate(args):
     dns_server = ACME_DNSServer(dns_records=[])
     # Start the HTTP challenge server
     threading.Thread(target=lambda: httpchallenge_server.run(
-        host="0.0.0.0", port= 5002, debug=False, threaded=True)).start()
+        host="0.0.0.0", port= 5002, debug=False, threaded=True), daemon=True).start()
 
 
     # Add the domain to the DNS server zone
@@ -40,7 +40,7 @@ def get_certificate(args):
     acme_client.get_directory_urls()
 
 
-    threading.Thread(target=dns_server.server.start).start()
+    threading.Thread(target=dns_server.server.start, daemon=True).start()
     acme_client.get_account()
 
 
@@ -91,16 +91,13 @@ def get_certificate(args):
 
 # Shutdown server created inside the main script
 httpshutdown_server = flask.Flask(__name__)
+shutdown_event = threading.Event()
 
 
 
 @httpshutdown_server.route('/shutdown')
 def route_shutdown():
-    shutdown = flask.request.environ.get('werkzeug.server.shutdown')
-    if shutdown is None:
-        raise RuntimeError('Not running with the Werkzeug Server')
-    shutdown()
-
+    threading.Timer(0.25, shutdown_event.set).start()
     return "Server shutting down"
 
 
@@ -117,7 +114,7 @@ def main():
     # Thread to the HTTP shutdown  server
 
     shutdown_thread = threading.Thread(target=lambda: httpshutdown_server.run(
-        host="0.0.0.0", port=5003, debug=False, threaded=True))
+        host="0.0.0.0", port=5003, debug=False, threaded=True), daemon=True)
 
     shutdown_thread.start()
 
@@ -131,9 +128,9 @@ def main():
     # Start HTTPS server to use the certificate
     https_server = flask.Flask(__name__)
     threading.Thread(target=lambda: https_server.run(
-        host="0.0.0.0", port=5001, debug=False, threaded=True, ssl_context=(Path(__file__).parent.absolute() / "cert.pem", Path(__file__).parent.absolute() / "key.pem"))).start()
+        host="0.0.0.0", port=5001, debug=False, threaded=True, ssl_context=(Path(__file__).parent.absolute() / "cert.pem", Path(__file__).parent.absolute() / "key.pem")), daemon=True).start()
 
-    shutdown_thread.join()
+    shutdown_event.wait()
 
 
 if __name__ == "__main__":
